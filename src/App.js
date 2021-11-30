@@ -167,7 +167,7 @@ function App() {
           const { blockNumber, returnValues } = bond;
 
           /** @type {{deposit: string; payout: string; expires: string; priceInUSD: string;}} */
-          const { deposit, expires, priceInUSD } = returnValues;
+          const { deposit, priceInUSD } = returnValues;
 
           const createdAtDateTime = (
             await getBlockDateTime(blockNumber)
@@ -186,7 +186,7 @@ function App() {
           const { blockNumber, returnValues } = bond;
 
           /** @type {{deposit: string; payout: string; expires: string; priceInUSD: string;}} */
-          const { deposit, expires, priceInUSD } = returnValues;
+          const { priceInUSD } = returnValues;
 
           const createdAtDateTime = (
             await getBlockDateTime(blockNumber)
