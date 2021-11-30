@@ -18,6 +18,7 @@ import "chartjs-adapter-luxon";
 import { Bar, Line } from "react-chartjs-2";
 import daiBondAbi from "./abi/daiBond.json";
 import wftmBondAbi from "./abi/wFtmBond.json";
+import spaDaiLpAbi from "./abi/spaDaiLp.json";
 import spaDaiLpBondAbi from "./abi/spaDaiLpBond.json";
 import config from "./config.json";
 import { alpha } from "@mui/material/styles";
@@ -69,6 +70,11 @@ const spaDaiLpBondContract = new web3.eth.Contract(
   config.contracts.spaDaiLpBond.address
 );
 
+const spaDaiLpContract = new web3.eth.Contract(
+  spaDaiLpAbi,
+  config.contracts.spaDaiLp.address
+);
+
 let cachedBlockNumber = null;
 /** @type {Record<string, import('luxon').DateTime>} */
 let blockTimestampCache = {};
@@ -83,7 +89,10 @@ const getBlockDateTime = async (blockNumber) => {
     return blockTimestampCache[blockNumber];
   }
 
-  if (cachedBlockNumber !== null) {
+  if (
+    cachedBlockNumber !== null &&
+    Math.abs(blockNumber - cachedBlockNumber) < 1000000
+  ) {
     const seconds = (blockNumber - cachedBlockNumber) * BLOCKS_PER_SECOND;
 
     const datetime = blockTimestampCache[cachedBlockNumber].plus({ seconds });
@@ -96,6 +105,7 @@ const getBlockDateTime = async (blockNumber) => {
   const { timestamp } = await web3.eth.getBlock(blockNumber);
 
   const datetime = DateTime.fromSeconds(timestamp);
+  console.log(datetime.toString());
 
   cachedBlockNumber = blockNumber;
 
@@ -112,11 +122,30 @@ const getBlockDateTime = async (blockNumber) => {
  * @property {number} priceInUSD
  */
 
+/**
+ * @typedef {object} Price
+ * @property {number} price
+ * @property {string} date
+ */
+
+/**
+ * @typedef {object} Data
+ * @property {ParsedDaiBond[]} daiBonds
+ * @property {ParsedDaiBond[]} wftmBonds
+ * @property {ParsedDaiBond[]} spaDaiLpBonds
+ * @property {Price[]} spaPrices
+ * @property {Price[]} wftmPrices
+ */
+
 const BLOCKS_PER_SECOND = 0.87;
 
 function App() {
   const [error, setError] = React.useState(null);
-  const [data, setData] = React.useState(null);
+  const [
+    /** @type {Data|null} */
+    data,
+    setData,
+  ] = React.useState(null);
 
   React.useEffect(() => {
     async function load() {
@@ -144,9 +173,7 @@ function App() {
 
           const expiresBlock = parseInt(expires);
 
-          const createdAtDateTime = (
-            await getBlockDateTime(blockNumber)
-          ).toLocal();
+          const createdAtDateTime = await getBlockDateTime(blockNumber);
 
           const bondVestSeconds =
             (expiresBlock - blockNumber) * BLOCKS_PER_SECOND;
@@ -169,10 +196,7 @@ function App() {
           /** @type {{deposit: string; payout: string; expires: string; priceInUSD: string;}} */
           const { deposit, priceInUSD } = returnValues;
 
-          const createdAtDateTime = (
-            await getBlockDateTime(blockNumber)
-          ).toLocal();
-
+          const createdAtDateTime = await getBlockDateTime(blockNumber);
           parsedWftmBonds.push({
             deposit: parseInt(deposit) / 10 ** 18,
             createdAt: createdAtDateTime.toJSDate(),
@@ -182,17 +206,19 @@ function App() {
 
         const parsedSpaDaiLpBonds = [];
 
+        const spaDaiLpDecimals = await spaDaiLpContract.methods
+          .decimals()
+          .call();
+
         for (const bond of spaDaiLpBonds) {
           const { blockNumber, returnValues } = bond;
 
           /** @type {{deposit: string; payout: string; expires: string; priceInUSD: string;}} */
-          const { priceInUSD } = returnValues;
+          const { deposit, priceInUSD } = returnValues;
 
-          const createdAtDateTime = (
-            await getBlockDateTime(blockNumber)
-          ).toLocal();
-
+          const createdAtDateTime = await getBlockDateTime(blockNumber);
           parsedSpaDaiLpBonds.push({
+            deposit: parseInt(deposit) / 10 ** spaDaiLpDecimals,
             createdAt: createdAtDateTime.toJSDate(),
             priceInUSD: parseInt(priceInUSD) / 10 ** 18,
           });
@@ -285,12 +311,16 @@ function App() {
     {
       dai: bondsByDay.dai,
       wftm: bondsByDay.wftm,
+      spaDaiLpBonds: bondsByDay.spaDaiLpBonds,
     },
     (bondsByD, token) =>
       _.mapValues(bondsByD, (ooga, dateString) => {
-        const tokenPrice = pricesByDay.spa[dateString].price;
+        const tokenPrice = pricesByDay.spa[dateString]?.price;
 
-        if (bondsByDay[token][dateString] === undefined) {
+        if (
+          tokenPrice === undefined ||
+          bondsByDay[token][dateString] === undefined
+        ) {
           return null;
         }
 
@@ -320,6 +350,7 @@ function App() {
 
   return (
     <Grid container direction="column" spacing={2} sx={{ p: 2 }}>
+      <Grid item>{DateTime.now().toString()}</Grid>
       <Grid item style={{ height: 300 }}>
         <Bar
           options={{
@@ -439,7 +470,9 @@ function App() {
             datasets: [
               {
                 label: "SPA",
-                data: labels.map((label) => pricesByDay.spa[label].price),
+                data: labels.map(
+                  (label) => pricesByDay.spa[label]?.price ?? null
+                ),
                 borderColor: PURPLE,
                 backgroundColor: PURPLE,
                 spanGaps: true,
@@ -511,8 +544,11 @@ function App() {
             datasets: [
               {
                 label: "DAI",
-                data: labels.map((label) => bondDiscountsByDay.dai[label]),
+                data: labels.map(
+                  (label) => bondDiscountsByDay.dai[label] ?? null
+                ),
                 backgroundColor: transparentize(RED, 0.2),
+                spanGaps: true,
               },
               {
                 label: "wFTM",
@@ -520,6 +556,15 @@ function App() {
                   (label) => bondDiscountsByDay.wftm[label] ?? null
                 ),
                 backgroundColor: transparentize(BLUE, 0.2),
+                spanGaps: true,
+              },
+              {
+                label: "SPA-DAI",
+                data: labels.map(
+                  (label) => bondDiscountsByDay.spaDaiLpBonds[label] ?? null
+                ),
+                backgroundColor: transparentize(GREEN, 0.2),
+                spanGaps: true,
               },
             ],
           }}
