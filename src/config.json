@@ -1,0 +1,56 @@
+{
+  "provider": {
+    "host": "https://rpc.ftm.tools"
+  },
+  "contracts": {
+    "devs": {
+      "address": "0x23172A552BeD9B521dBbaa2EeE9331e16D73865c"
+    },
+    "wftm": {
+      "address": "0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83"
+    },
+    "spa": {
+      "address": "0x5602df4A94eB6C680190ACCFA2A475621E0ddBdc"
+    },
+    "spaCirculatingSupply": {
+      "address": "0x37AaB9929f821B737B9Bd0658E97F820A9c92076"
+    },
+    "spaStaking": {
+      "address": "0x9863056B4Bdb32160A70107a6797dD06B56E8137"
+    },
+    "spaStakingHelper": {
+      "address": "0xbd39045344cD9b8FB4622959725D65e49dB2D090"
+    },
+    "spaStakingWarmup": {
+      "address": "0x585DaC823A952Ff67b1BF73F7d754550db7bc2CD"
+    },
+    "sSpa": {
+      "address": "0x8e2549225E21B1Da105563D419d5689b80343E01"
+    },
+    "daiBond": {
+      "address": "0x5D449738986ab34280373502031D1513581Cb649",
+      "fromBlock": 20741105
+    },
+    "wFtmBond": {
+      "address": "0x7E1FaF28a0Ed1A736765d29eD9a985A4D921E1d4",
+      "fromBlock": 22213972
+    },
+    "spaDaiLpBond": {
+      "address": "0x8927a01AcBb4820f848711e2B7353d62172053b9",
+      "fromBlock": 20741360
+    },
+    "spaDaiLp": {
+      "address": "0xfa5a5f0bc990be1d095c5385fff6516f6e03c0a7",
+      "fromBlock": 20712168
+    },
+    "spaBondingCalc": {
+      "address": "0x5DdD235421e4c27c84F26A43B5a1ad657E64ED61"
+    },
+    "dao": {
+      "address": "0x3292D7d72Ea46cb67186Cd7131fe47333F7c7008"
+    },
+    "treasury": {
+      "address": "0x8CFA87aD11e69E071c40D58d2d1a01F862aE01a8"
+    }
+  }
+}
