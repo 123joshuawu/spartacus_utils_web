@@ -822,7 +822,7 @@ function App() {
           }}
         />
       </Grid>
-      <Grid item container spacing={4} style={{ height: 300 }}>
+      <Grid item container spacing={4} style={{ minHeight: 300 }}>
         <Grid item xs={12} sm={6} md={3}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6">BCV Changes</Typography>
