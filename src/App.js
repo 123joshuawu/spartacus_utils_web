@@ -30,6 +30,7 @@ import CircularProgress from "@mui/material/CircularProgress";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
+import { useQuery, gql } from "@apollo/client";
 
 const RED = red[500];
 const GREEN = green[500];
@@ -133,11 +134,26 @@ const getBlockDateTime = async (blockNumber) => {
  * @property {ParsedDaiBond[]} daiBonds
  * @property {ParsedDaiBond[]} wftmBonds
  * @property {ParsedDaiBond[]} spaDaiLpBonds
- * @property {Price[]} spaPrices
- * @property {Price[]} wftmPrices
  */
 
 const BLOCKS_PER_SECOND = 0.87;
+
+const QUERY = gql`
+  query getSpaPrice {
+    spa: tokens(where: { id: "0x5602df4a94eb6c680190accfa2a475621e0ddbdc" }) {
+      tokenDayData {
+        date
+        priceUSD
+      }
+    }
+    wftm: tokens(where: { id: "0x21be370d5312f44cb42ce377bc9b8a0cef1a4c83" }) {
+      tokenDayData(where: { date_gte: 1635724800 }) {
+        date
+        priceUSD
+      }
+    }
+  }
+`;
 
 function App() {
   const [error, setError] = React.useState(null);
@@ -146,6 +162,8 @@ function App() {
     data,
     setData,
   ] = React.useState(null);
+
+  const { data: priceData, loading, error: apolloError } = useQuery(QUERY);
 
   React.useEffect(() => {
     async function load() {
@@ -224,33 +242,10 @@ function App() {
           });
         }
 
-        const dates = parsedDaiBonds.map(({ createdAt }) => createdAt);
-        const minDate = new Date(Math.min.apply(null, dates));
-        const maxDate = new Date(Math.max.apply(null, dates));
-
-        const response = await axios.get(
-          `https://api.covalenthq.com/v1/pricing/historical_by_addresses_v2/250/USD/${config.contracts.spa.address},${config.contracts.wftm.address}/`,
-          {
-            params: {
-              "quote-currency": "USD",
-              format: "JSON",
-              from: DateTime.fromJSDate(minDate).toFormat("yyyy-MM-dd"),
-              to: DateTime.fromJSDate(maxDate).toFormat("yyyy-MM-dd"),
-              "prices-at-asc": "true",
-              key: "ckey_9e66057f842d4e06b7138f8b411", //process.env.REACT_APP_COVALENT_API_KEY,
-            },
-            headers: {
-              Accept: "application/json",
-            },
-          }
-        );
-
         setData({
           daiBonds: parsedDaiBonds,
           wftmBonds: parsedWftmBonds,
           spaDaiLpBonds: parsedSpaDaiLpBonds,
-          spaPrices: response.data.data[0].prices,
-          wftmPrices: response.data.data[1].prices,
         });
       } catch (err) {
         console.error(err);
@@ -261,19 +256,17 @@ function App() {
     load();
   }, []);
 
-  if (error) {
+  if (error || apolloError) {
     return (
       <Container sx={{ pt: 30 }}>
         <Stack justifyContent="center" alignItems="center">
-          <Alert severity="error">
-            Failed to load data: {error?.message || error}
-          </Alert>
+          <Alert severity="error">Failed to load data</Alert>
         </Stack>
       </Container>
     );
   }
 
-  if (data === null) {
+  if (data === null || loading || !priceData) {
     return (
       <Container sx={{ pt: 30 }}>
         <Stack spacing={4} justifyContent="center" alignItems="center">
@@ -293,19 +286,28 @@ function App() {
     (value) => _.groupBy(value, (bond) => bond.createdAt.toLocaleDateString())
   );
 
-  const pricesByDay = _.mapValues(
-    {
-      spa: data.spaPrices,
-      wftm: data.wftmPrices,
-    },
-    (value) =>
-      value.reduce((agg, priceData) => {
-        agg[
-          DateTime.fromFormat(priceData.date, "yyyy-MM-dd").toFormat("M/d/yyyy")
-        ] = priceData;
-        return agg;
-      }, {})
+  const pricesByDay = _.mapValues(priceData, ([{ tokenDayData }]) =>
+    tokenDayData.reduce((agg, { date, priceUSD }) => {
+      agg[DateTime.fromSeconds(date).toFormat("M/d/yyyy")] = {
+        price: parseFloat(priceUSD),
+      };
+      return agg;
+    }, {})
   );
+
+  // const pricesByDay = _.mapValues(
+  //   {
+  //     spa: data.spaPrices,
+  //     wftm: data.wftmPrices,
+  //   },
+  //   (value) =>
+  //     value.reduce((agg, priceData) => {
+  //       agg[
+  //         DateTime.fromFormat(priceData.date, "yyyy-MM-dd").toFormat("M/d/yyyy")
+  //       ] = priceData;
+  //       return agg;
+  //     }, {})
+  // );
 
   const bondDiscountsByDay = _.mapValues(
     {
