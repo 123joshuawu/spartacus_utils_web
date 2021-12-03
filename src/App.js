@@ -21,7 +21,6 @@ import wftmBondAbi from "./abi/wFtmBond.json";
 import spaDaiLpAbi from "./abi/spaDaiLp.json";
 import spaDaiLpBondAbi from "./abi/spaDaiLpBond.json";
 import spaAbi from "./abi/spa.json";
-import sSpaAbi from "./abi/sSpa.json";
 import config from "./config.json";
 import { alpha } from "@mui/material/styles";
 import { red, green, blue, purple, pink } from "@mui/material/colors";
@@ -93,11 +92,6 @@ const spaDaiLpBondContract = new web3.eth.Contract(
 const spaDaiLpContract = new web3.eth.Contract(
   spaDaiLpAbi,
   config.contracts.spaDaiLp.address
-);
-
-const sSpaContract = new web3.eth.Contract(
-  sSpaAbi,
-  config.contracts.sSpa.address
 );
 
 let cachedBlockNumber = null;
