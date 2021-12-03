@@ -25,7 +25,8 @@
       "address": "0x585DaC823A952Ff67b1BF73F7d754550db7bc2CD"
     },
     "sSpa": {
-      "address": "0x8e2549225E21B1Da105563D419d5689b80343E01"
+      "address": "0x8e2549225E21B1Da105563D419d5689b80343E01",
+      "fromBlock": 20743258
     },
     "daiBond": {
       "address": "0x5D449738986ab34280373502031D1513581Cb649",

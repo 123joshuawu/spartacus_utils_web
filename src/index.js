@@ -1,28 +1,17 @@
-import React from 'react';
-import ReactDOM from 'react-dom';
-import {
-  ApolloClient,
-  InMemoryCache,
-  ApolloProvider,
-} from "@apollo/client";
+import React from "react";
+import ReactDOM from "react-dom";
+import CssBaseline from "@mui/material/CssBaseline";
 
-import './index.css';
-import App from './App';
-import reportWebVitals from './reportWebVitals';
-
-const client = new ApolloClient({
-  uri: process.env.REACT_APP_THE_GRAPH_URL,
-  cache: new InMemoryCache()
-});
-
+import "./index.css";
+import App from "./App";
+import reportWebVitals from "./reportWebVitals";
 
 ReactDOM.render(
   <React.StrictMode>
-    <ApolloProvider client={client}>
+    <CssBaseline />
     <App />
-    </ApolloProvider>
   </React.StrictMode>,
-  document.getElementById('root')
+  document.getElementById("root")
 );
 
 // If you want to start measuring performance in your app, pass a function
