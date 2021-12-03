@@ -23,7 +23,6 @@ import spaDaiLpBondAbi from "./abi/spaDaiLpBond.json";
 import config from "./config.json";
 import { alpha } from "@mui/material/styles";
 import { red, green, blue, purple } from "@mui/material/colors";
-import axios from "axios";
 import Grid from "@mui/material/Grid";
 import Container from "@mui/material/Container";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -151,6 +150,13 @@ const QUERY = gql`
         date
         priceUSD
       }
+    }
+    pairDayDatas(
+      where: { pairAddress: "0xfa5a5f0bc990be1d095c5385fff6516f6e03c0a7" }
+    ) {
+      date
+      reserveUSD
+      totalSupply
     }
   }
 `;
@@ -286,28 +292,23 @@ function App() {
     (value) => _.groupBy(value, (bond) => bond.createdAt.toLocaleDateString())
   );
 
-  const pricesByDay = _.mapValues(priceData, ([{ tokenDayData }]) =>
-    tokenDayData.reduce((agg, { date, priceUSD }) => {
-      agg[DateTime.fromSeconds(date).toFormat("M/d/yyyy")] = {
-        price: parseFloat(priceUSD),
-      };
-      return agg;
-    }, {})
+  const pricesByDay = _.mapValues(
+    {
+      spa: priceData.spa,
+      wftm: priceData.wftm,
+      spaDaiLpBonds: priceData.pairDayDatas,
+    },
+    (arr) =>
+      (arr.length === 1 ? arr[0].tokenDayData : arr).reduce(
+        (agg, { date, priceUSD, reserveUSD, totalSupply }) => {
+          agg[DateTime.fromSeconds(date).toFormat("M/d/yyyy")] = {
+            price: parseFloat(reserveUSD ?? priceUSD) / (totalSupply ?? 1),
+          };
+          return agg;
+        },
+        {}
+      )
   );
-
-  // const pricesByDay = _.mapValues(
-  //   {
-  //     spa: data.spaPrices,
-  //     wftm: data.wftmPrices,
-  //   },
-  //   (value) =>
-  //     value.reduce((agg, priceData) => {
-  //       agg[
-  //         DateTime.fromFormat(priceData.date, "yyyy-MM-dd").toFormat("M/d/yyyy")
-  //       ] = priceData;
-  //       return agg;
-  //     }, {})
-  // );
 
   const bondDiscountsByDay = _.mapValues(
     {
@@ -352,7 +353,6 @@ function App() {
 
   return (
     <Grid container direction="column" spacing={2} sx={{ p: 2 }}>
-      <Grid item>{DateTime.now().toString()}</Grid>
       <Grid item style={{ height: 300 }}>
         <Bar
           options={{
@@ -447,6 +447,18 @@ function App() {
                 ),
                 backgroundColor: transparentize(BLUE, 0.2),
               },
+              {
+                label: "SPA-DAI",
+                data: labels.map((label) =>
+                  pricesByDay.spaDaiLpBonds[label]
+                    ? _.sumBy(
+                        bondsByDay.spaDaiLpBonds[label],
+                        (bond) => bond.deposit
+                      ) * pricesByDay.spaDaiLpBonds[label].price
+                    : null
+                ),
+                backgroundColor: transparentize(GREEN, 0.2),
+              },
             ],
           }}
         />
@@ -489,7 +501,7 @@ function App() {
                       ) / bondsByDay.dai[label].length
                     : null
                 ),
-                borderColor: RED,
+                borderColor: transparentize(RED, 0.5),
                 backgroundColor: transparentize(RED, 0.5),
                 spanGaps: true,
               },
@@ -503,7 +515,7 @@ function App() {
                       ) / bondsByDay.wftm[label].length
                     : null
                 ),
-                borderColor: BLUE,
+                borderColor: transparentize(BLUE, 0.5),
                 backgroundColor: transparentize(BLUE, 0.5),
                 spanGaps: true,
               },
@@ -517,7 +529,7 @@ function App() {
                       ) / bondsByDay.spaDaiLpBonds[label].length
                     : null
                 ),
-                borderColor: GREEN,
+                borderColor: transparentize(GREEN, 0.5),
                 backgroundColor: transparentize(GREEN, 0.5),
                 spanGaps: true,
               },
