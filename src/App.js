@@ -981,37 +981,6 @@ function App() {
         />
       </Grid>
       <Grid item style={{ height: 300 }}>
-        <Bar
-          options={{
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-              title: {
-                display: true,
-                text: "Staked SPA",
-              },
-            },
-          }}
-          height={null}
-          width={null}
-          data={{
-            labels,
-            datasets: [
-              {
-                label: "sSPA",
-                data: labels.map(
-                  (label) => rebaseByDay[label]?.stakedOhms ?? null
-                ),
-                backgroundColor: transparentize(PINK, 0.2),
-                spanGaps: true,
-              },
-            ],
-          }}
-        />
-      </Grid>
-      <Grid item style={{ height: 300 }}>
         <Line
           options={{
             maintainAspectRatio: false,
@@ -1021,7 +990,7 @@ function App() {
               },
               title: {
                 display: true,
-                text: "Staked SPA",
+                text: "SPA over time",
               },
             },
             scales: {
@@ -1035,7 +1004,7 @@ function App() {
           data={{
             datasets: [
               {
-                label: "sSPA",
+                label: "Staked SPA",
                 data: [
                   { x: DateTime.fromFormat(labels[0], "M/d/yyyy"), y: null },
                   ..._.sortBy(
@@ -1050,35 +1019,8 @@ function App() {
                 borderColor: PINK,
                 backgroundColor: transparentize(PINK, 0.2),
               },
-            ],
-          }}
-        />
-      </Grid>
-      <Grid item style={{ height: 300 }}>
-        <Line
-          options={{
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                position: "top",
-              },
-              title: {
-                display: true,
-                text: "Total SPA Supply",
-              },
-            },
-            scales: {
-              x: {
-                type: "time",
-              },
-            },
-          }}
-          height={null}
-          width={null}
-          data={{
-            datasets: [
               {
-                label: "SPA",
+                label: "SPA Total Supply",
                 data: [
                   { x: DateTime.fromFormat(labels[0], "M/d/yyyy"), y: null },
                   ..._.sortBy(
@@ -1098,6 +1040,7 @@ function App() {
           }}
         />
       </Grid>
+
       <Grid item style={{ height: 300 }}>
         <Bar
           options={{
