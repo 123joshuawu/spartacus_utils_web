@@ -20,6 +20,7 @@ import daiBondAbi from "./abi/daiBond.json";
 import wftmBondAbi from "./abi/wFtmBond.json";
 import spaDaiLpAbi from "./abi/spaDaiLp.json";
 import spaDaiLpBondAbi from "./abi/spaDaiLpBond.json";
+import spaBondingCalcAbi from "./abi/spaBondingCalc.json";
 import spaAbi from "./abi/spa.json";
 import config from "./config.json";
 import { alpha } from "@mui/material/styles";
@@ -94,6 +95,11 @@ const spaDaiLpContract = new web3.eth.Contract(
   config.contracts.spaDaiLp.address
 );
 
+const spaBondingCalcContract = new web3.eth.Contract(
+  spaBondingCalcAbi,
+  config.contracts.spaBondingCalc.address
+);
+
 let cachedBlockNumber = null;
 /** @type {Record<string, import('luxon').DateTime>} */
 let blockTimestampCache = {};
@@ -124,7 +130,6 @@ const getBlockDateTime = async (blockNumber) => {
   const { timestamp } = await web3.eth.getBlock(blockNumber);
 
   const datetime = DateTime.fromSeconds(timestamp);
-  console.log(datetime.toString());
 
   cachedBlockNumber = blockNumber;
 
@@ -174,6 +179,10 @@ const SPA_QUERY = gql`
 
 const SPOOKYSWAP_QUERY = gql`
   query getSpaPrice {
+    pair(id: "0xfa5a5f0bc990be1d095c5385fff6516f6e03c0a7") {
+      reserve0
+      reserve1
+    }
     spa: tokens(where: { id: "0x5602df4a94eb6c680190accfa2a475621e0ddbdc" }) {
       tokenDayData(orderBy: date) {
         date
@@ -364,15 +373,24 @@ function App() {
           dai: {
             ...(await daiBondContract.methods.terms().call()),
             currentDebt: await daiBondContract.methods.currentDebt().call(),
+            basePrice: await daiBondContract.methods.basePrice().call(),
+            debtRatio: await daiBondContract.methods.debtRatio().call(),
           },
           wftm: {
             ...(await wftmBondContract.methods.terms().call()),
             currentDebt: await wftmBondContract.methods.currentDebt().call(),
+            basePrice: await wftmBondContract.methods.basePrice().call(),
+            debtRatio: await wftmBondContract.methods.debtRatio().call(),
           },
           spaDaiLp: {
             ...(await spaDaiLpBondContract.methods.terms().call()),
             currentDebt: await spaDaiLpBondContract.methods
               .currentDebt()
+              .call(),
+            basePrice: await spaDaiLpBondContract.methods.basePrice().call(),
+            debtRatio: await spaDaiLpBondContract.methods.debtRatio().call(),
+            markdown: await spaBondingCalcContract.methods
+              .markdown(config.contracts.spaDaiLp.address)
               .call(),
           },
         };
@@ -388,6 +406,8 @@ function App() {
           bcvChanges,
           info,
           spa,
+          wftm: { price: 0 },
+          spaDaiLp: { price: 0 },
         });
       } catch (err) {
         console.error(err);
@@ -448,8 +468,6 @@ function App() {
     };
   });
 
-  console.log(rebaseByDay);
-
   const bondsByDay = _.mapValues(
     {
       dai: data.daiBonds,
@@ -458,6 +476,9 @@ function App() {
     },
     (value) => _.groupBy(value, (bond) => bond.createdAt.toLocaleDateString())
   );
+
+  data.spa.price =
+    parseFloat(priceData.pair.reserve1) / parseFloat(priceData.pair.reserve0);
 
   const pricesByDay = _.mapValues(
     {
@@ -472,41 +493,16 @@ function App() {
           agg[DateTime.fromSeconds(date).toFormat("M/d/yyyy")] = {
             price,
           };
-
-          if (token === "spa" && index === arr.length - 1) {
-            data.spa.price = price;
-            console.log(price);
+          if (token === "wftm") {
+            data.wftm.price = price;
+          }
+          if (token === "spaDaiLpBonds") {
+            data.spaDaiLp.price = price;
           }
           return agg;
         },
         {}
       )
-  );
-
-  const bondDiscountsByDay = _.mapValues(
-    {
-      dai: bondsByDay.dai,
-      wftm: bondsByDay.wftm,
-      spaDaiLpBonds: bondsByDay.spaDaiLpBonds,
-    },
-    (bondsByD, token) =>
-      _.mapValues(bondsByD, (ooga, dateString) => {
-        const tokenPrice = pricesByDay.spa[dateString]?.price;
-
-        if (
-          tokenPrice === undefined ||
-          bondsByDay[token][dateString] === undefined
-        ) {
-          return null;
-        }
-
-        const bonds = bondsByDay[token][dateString];
-
-        const bondPrice =
-          _.sumBy(bonds, (bond) => bond.priceInUSD) / bonds.length;
-
-        return ((tokenPrice - bondPrice) / tokenPrice) * 100;
-      })
   );
 
   const labels = Object.keys(bondsByDay.dai);
@@ -523,13 +519,36 @@ function App() {
       return 0;
     }
   });
-  console.log(data);
-  console.log(
-    protocolMetrics.slice(1).map(({ timestamp, ...as }) => ({
-      timestamp: timestamp.toFormat("M/d/yyyy"),
-      ...as,
-    }))
+
+  const bondDiscountsByDay = _.mapValues(
+    {
+      dai: bondsByDay.dai,
+      wftm: bondsByDay.wftm,
+      spaDaiLpBonds: bondsByDay.spaDaiLpBonds,
+    },
+    (bondsByD, token) =>
+      _.mapValues(bondsByD, (ooga, dateString) => {
+        const tokenPrice =
+          labels.indexOf(dateString) === labels.length - 1
+            ? data.spa.price
+            : pricesByDay.spa[dateString]?.price ?? null;
+
+        if (
+          tokenPrice === null ||
+          bondsByDay[token][dateString] === undefined
+        ) {
+          return null;
+        }
+
+        const bonds = bondsByDay[token][dateString];
+
+        const bondPrice =
+          _.sumBy(bonds, (bond) => bond.priceInUSD) / bonds.length;
+
+        return ((tokenPrice - bondPrice) / tokenPrice) * 100;
+      })
   );
+
   return (
     <Grid container direction="column" spacing={2} sx={{ p: 2 }}>
       <Grid item style={{ height: 300 }}>
@@ -663,8 +682,10 @@ function App() {
             datasets: [
               {
                 label: "SPA",
-                data: labels.map(
-                  (label) => pricesByDay.spa[label]?.price ?? null
+                data: labels.map((label, index) =>
+                  index === labels.length - 1
+                    ? data.spa.price
+                    : pricesByDay.spa[label]?.price ?? null
                 ),
                 borderColor: PURPLE,
                 backgroundColor: PURPLE,
@@ -773,7 +794,7 @@ function App() {
               },
               title: {
                 display: true,
-                text: "Bond Payout",
+                text: "SPA minted for bond payout",
               },
             },
             scales: {
@@ -847,7 +868,7 @@ function App() {
           </Paper>
         </Grid>
         <Grid item xs={12} sm={6} md={9} container spacing={4}>
-          {/* <Grid item>
+          <Grid item>
             <Paper sx={{ p: 4, my: 2 }}>
               <Typography variant="h6">SPA</Typography>
               <Typography>
@@ -855,12 +876,48 @@ function App() {
               </Typography>
               <Typography>Price: {formatUSD(data.spa.price)}</Typography>
             </Paper>
-          </Grid> */}
+          </Grid>
+          <Grid item>
+            <Paper sx={{ p: 4, my: 2 }}>
+              <Typography variant="h6">wFTM</Typography>
+
+              <Typography>Price: {formatUSD(data.wftm.price)}</Typography>
+            </Paper>
+          </Grid>
           {Object.entries(data.info).map(
-            ([key, { controlVariable, maxPayout, maxDebt, currentDebt }]) => {
-              const debtRatio = currentDebt / data.spa.totalSupply / 100;
-              const maxSpaPayout =
-                (maxPayout / 1000 / 100) * (data.spa.totalSupply / 10 ** 9);
+            ([
+              key,
+              { controlVariable, maxPayout, basePrice, currentDebt, debtRatio },
+            ]) => {
+              const calcDebtRatio = currentDebt / data.spa.totalSupply;
+              // const maxSpaPayout =
+              //   (maxPayout / 1000 / 100) * (data.spa.totalSupply / 10 ** 9);
+              let price =
+                (((controlVariable * parseFloat(debtRatio) +
+                  parseFloat(basePrice)) /
+                  10 ** 7) *
+                  10 ** 9) /
+                100 /
+                10 ** 9;
+              console.log(price);
+              if (key === "wftm") {
+                price *= data.wftm.price;
+              }
+              if (key === "spaDaiLp") {
+                console.log(priceData.pair);
+                const kvalue =
+                  (parseFloat(priceData.pair.reserve0) *
+                    parseFloat(priceData.pair.reserve1)) /
+                  10 ** 18;
+                console.log(kvalue);
+                const totalvalue = Math.sqrt(kvalue) * 2;
+                console.log(totalvalue);
+                const markdown =
+                  (parseFloat(priceData.pair.reserve1) * 2) / totalvalue;
+                console.log(markdown);
+
+                price *= markdown / 10 ** 9;
+              }
 
               return (
                 <Grid item key={key}>
@@ -868,14 +925,26 @@ function App() {
                     <Typography variant="h6">{LABELS[key]}</Typography>
                     <Typography>BCV: {controlVariable}</Typography>
                     <Typography>
+                      Base Price: {formatUSD(basePrice / 10 ** 9)}
+                    </Typography>
+                    {/* <Typography>
                       Max Payout: {formatToken(maxSpaPayout)} SPA (
                       {formatUSD(maxSpaPayout * data.spa.price)})
-                    </Typography>
+                    </Typography> */}
                     <Typography>
                       Current Debt: {formatToken(currentDebt / 10 ** 9)} SPA
                     </Typography>
                     <Typography>
-                      Debt Ratio: {formatPercent(debtRatio)}
+                      Debt Ratio: {Number(calcDebtRatio).toFixed(2)}
+                    </Typography>
+                    <Typography>
+                      Price: {formatUSD(price)} = {controlVariable} *{" "}
+                      {Number(calcDebtRatio).toFixed(2)} +{" "}
+                      {formatUSD(basePrice / 10 ** 9)}
+                    </Typography>
+                    <Typography>
+                      Discount:{" "}
+                      {formatPercent((data.spa.price - price) / price)}
                     </Typography>
                   </Paper>
                 </Grid>
