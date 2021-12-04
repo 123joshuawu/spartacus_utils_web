@@ -889,7 +889,8 @@ function App() {
               key,
               { controlVariable, maxPayout, basePrice, currentDebt, debtRatio },
             ]) => {
-              const calcDebtRatio = currentDebt / data.spa.totalSupply;
+              const calcDebtRatio = currentDebt / data.spa.totalSupply / 100;
+
               // const maxSpaPayout =
               //   (maxPayout / 1000 / 100) * (data.spa.totalSupply / 10 ** 9);
               let price =
@@ -904,17 +905,13 @@ function App() {
                 price *= data.wftm.price;
               }
               if (key === "spaDaiLp") {
-                console.log(priceData.pair);
                 const kvalue =
                   (parseFloat(priceData.pair.reserve0) *
                     parseFloat(priceData.pair.reserve1)) /
                   10 ** 18;
-                console.log(kvalue);
                 const totalvalue = Math.sqrt(kvalue) * 2;
-                console.log(totalvalue);
                 const markdown =
                   (parseFloat(priceData.pair.reserve1) * 2) / totalvalue;
-                console.log(markdown);
 
                 price *= markdown / 10 ** 9;
               }
@@ -932,10 +929,11 @@ function App() {
                       {formatUSD(maxSpaPayout * data.spa.price)})
                     </Typography> */}
                     <Typography>
-                      Current Debt: {formatToken(currentDebt / 10 ** 9)} SPA
+                      Current Debt: {formatToken(currentDebt / 10 ** 9 / 100)}{" "}
+                      SPA
                     </Typography>
                     <Typography>
-                      Debt Ratio: {Number(calcDebtRatio).toFixed(2)}
+                      Debt Ratio: {formatPercent(calcDebtRatio)}
                     </Typography>
                     <Typography>
                       Price: {formatUSD(price)} = {controlVariable} *{" "}
@@ -1085,7 +1083,7 @@ function App() {
                   { x: DateTime.fromFormat(labels[0], "M/d/yyyy"), y: null },
                   ..._.sortBy(
                     protocolMetrics.map((metrics) => ({
-                      x: metrics.timestamp.startOf("day").toJSDate(),
+                      x: metrics.timestamp.toJSDate(),
                       y: metrics.totalSupply,
                     })),
                     "x"
