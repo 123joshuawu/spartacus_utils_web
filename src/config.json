@@ -1,6 +1,6 @@
 {
   "provider": {
-    "host": "https://rpc.ftm.tools"
+    "host": "wss://wsapi.fantom.network/"
   },
   "contracts": {
     "devs": {

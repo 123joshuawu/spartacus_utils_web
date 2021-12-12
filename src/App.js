@@ -22,6 +22,7 @@ import spaDaiLpAbi from "./abi/spaDaiLp.json";
 import spaDaiLpBondAbi from "./abi/spaDaiLpBond.json";
 import spaBondingCalcAbi from "./abi/spaBondingCalc.json";
 import spaAbi from "./abi/spa.json";
+import sSpaAbi from "./abi/sSpa.json";
 import config from "./config.json";
 import { alpha } from "@mui/material/styles";
 import { red, green, blue, purple, pink } from "@mui/material/colors";
@@ -37,6 +38,17 @@ import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 import Paper from "@mui/material/Paper";
 import { ApolloClient, InMemoryCache } from "@apollo/client";
+import {
+  Table,
+  TableContainer,
+  TableBody,
+  TableHead,
+  TableCell,
+  TableRow,
+  Link,
+  Button,
+  Divider,
+} from "@mui/material";
 
 const spookySwapClient = new ApolloClient({
   uri: "https://api.thegraph.com/subgraphs/name/eerieeight/spookyswap",
@@ -71,9 +83,16 @@ ChartJS.register(
   Legend
 );
 
-const web3 = new Web3(new Web3.providers.HttpProvider(config.provider.host));
+const web3 = new Web3(
+  new Web3.providers.WebsocketProvider(config.provider.host)
+);
 
 const spaContract = new web3.eth.Contract(spaAbi, config.contracts.spa.address);
+
+const sSpaContract = new web3.eth.Contract(
+  sSpaAbi,
+  config.contracts.sSpa.address
+);
 
 const daiBondContract = new web3.eth.Contract(
   daiBondAbi,
@@ -109,12 +128,13 @@ let blockTimestampCache = {};
  * @param {number} blockNumber
  * @returns {Promise<import('luxon').DateTime>}
  */
-const getBlockDateTime = async (blockNumber) => {
+const getBlockDateTime = async (blockNumber, force = false) => {
   if (blockTimestampCache[blockNumber]) {
     return blockTimestampCache[blockNumber];
   }
 
   if (
+    !force &&
     cachedBlockNumber !== null &&
     Math.abs(blockNumber - cachedBlockNumber) < 1000000
   ) {
@@ -126,7 +146,7 @@ const getBlockDateTime = async (blockNumber) => {
 
     return datetime;
   }
-
+  console.log(blockNumber);
   const { timestamp } = await web3.eth.getBlock(blockNumber);
 
   const datetime = DateTime.fromSeconds(timestamp);
@@ -163,7 +183,7 @@ const BLOCKS_PER_SECOND = 0.87;
 
 const SPA_QUERY = gql`
   query getSpa {
-    rebases {
+    rebases(first: 1000, orderBy: timestamp, orderDirection: asc) {
       amount
       stakedOhms
       percentage
@@ -256,27 +276,37 @@ function App() {
   React.useEffect(() => {
     async function load() {
       try {
-        const [daiBonds, wftmBonds, spaDaiLpBonds, daiBcv, wftmBcv, spaDaiBcv] =
-          await Promise.all([
-            daiBondContract.getPastEvents("BondCreated", {
-              fromBlock: config.contracts.daiBond.fromBlock,
-            }),
-            wftmBondContract.getPastEvents("BondCreated", {
-              fromBlock: config.contracts.wFtmBond.fromBlock,
-            }),
-            spaDaiLpBondContract.getPastEvents("BondCreated", {
-              fromBlock: config.contracts.spaDaiLpBond.fromBlock,
-            }),
-            daiBondContract.getPastEvents("ControlVariableAdjustment", {
-              fromBlock: config.contracts.daiBond.fromBlock,
-            }),
-            wftmBondContract.getPastEvents("ControlVariableAdjustment", {
-              fromBlock: config.contracts.wFtmBond.fromBlock,
-            }),
-            spaDaiLpBondContract.getPastEvents("ControlVariableAdjustment", {
-              fromBlock: config.contracts.spaDaiLpBond.fromBlock,
-            }),
-          ]);
+        const [
+          rebases,
+          daiBonds,
+          wftmBonds,
+          spaDaiLpBonds,
+          daiBcv,
+          wftmBcv,
+          spaDaiBcv,
+        ] = await Promise.all([
+          sSpaContract.getPastEvents("LogRebase", {
+            fromBlock: config.contracts.sSpa.fromBlock,
+          }),
+          daiBondContract.getPastEvents("BondCreated", {
+            fromBlock: config.contracts.daiBond.fromBlock,
+          }),
+          wftmBondContract.getPastEvents("BondCreated", {
+            fromBlock: config.contracts.wFtmBond.fromBlock,
+          }),
+          spaDaiLpBondContract.getPastEvents("BondCreated", {
+            fromBlock: config.contracts.spaDaiLpBond.fromBlock,
+          }),
+          daiBondContract.getPastEvents("ControlVariableAdjustment", {
+            fromBlock: config.contracts.daiBond.fromBlock,
+          }),
+          wftmBondContract.getPastEvents("ControlVariableAdjustment", {
+            fromBlock: config.contracts.wFtmBond.fromBlock,
+          }),
+          spaDaiLpBondContract.getPastEvents("ControlVariableAdjustment", {
+            fromBlock: config.contracts.spaDaiLpBond.fromBlock,
+          }),
+        ]);
 
         /** @type {ParsedDaiBond[]} */
         const parsedDaiBonds = [];
@@ -368,6 +398,16 @@ function App() {
 
           bcvChanges.push({ changedAt, returnValues, bond: "spaDaiLp" });
         }
+        const parsedRebases = [];
+        for (const rebase of rebases) {
+          const { blockNumber, returnValues } = rebase;
+
+          const { epoch, index } = returnValues;
+
+          const rebasedAt = await getBlockDateTime(blockNumber, true);
+
+          parsedRebases.push({ blockNumber, rebasedAt, index, epoch });
+        }
 
         const info = {
           dai: {
@@ -400,6 +440,7 @@ function App() {
         };
 
         setData({
+          rebases: parsedRebases,
           daiBonds: parsedDaiBonds,
           wftmBonds: parsedWftmBonds,
           spaDaiLpBonds: parsedSpaDaiLpBonds,
@@ -418,6 +459,20 @@ function App() {
     load();
   }, []);
 
+  React.useLayoutEffect(() => {
+    if (data === null || loading || loadingSpa || !priceData) {
+      return;
+    }
+
+    if (!window.location.href.endsWith("#rebase-index")) {
+      return;
+    }
+
+    document
+      .getElementById("rebase-index")
+      .scrollIntoView({ behavior: "smooth" });
+  }, [data, loading, loadingSpa, priceData]);
+
   if (error || apolloError || spaError) {
     return (
       <Container sx={{ pt: 30 }}>
@@ -434,6 +489,26 @@ function App() {
         <Stack spacing={4} justifyContent="center" alignItems="center">
           <CircularProgress />
           <Typography variant="h6">Loading</Typography>
+          <Typography>
+            This could take a minute or two, thank you for your patience!
+          </Typography>
+          <Divider />
+          <Stack spacing={2}>
+            {data === null && (
+              <Alert severity="info">Loading on-chain data</Alert>
+            )}
+            {loading && <Alert severity="info">Loading SpookySwap data</Alert>}
+            {loadingSpa && (
+              <Alert severity="info">Loading Spartacus data</Alert>
+            )}
+            {data !== null && (
+              <Alert severity="success">Loaded on-chain data</Alert>
+            )}
+            {priceData && (
+              <Alert severity="success">Loaded SpookySwap data</Alert>
+            )}
+            {spaData && <Alert severity="success">Loaded Spartacus data</Alert>}
+          </Stack>
         </Stack>
       </Container>
     );
@@ -548,6 +623,12 @@ function App() {
         return ((tokenPrice - bondPrice) / tokenPrice) * 100;
       })
   );
+
+  let spaIndex = 1;
+  const rebasesWithIndex = rebases.map((rebase) => {
+    spaIndex *= 1 + parseFloat(rebase.percentage);
+    return { ...rebase, index: spaIndex };
+  });
 
   return (
     <Grid container direction="column" spacing={2} sx={{ p: 2 }}>
@@ -978,6 +1059,63 @@ function App() {
             ],
           }}
         />
+      </Grid>
+      <Grid item id="rebase-index">
+        <Typography variant="h6">
+          Rebase Index ({data.rebases.length} total rebases)
+        </Typography>
+        <Button
+          variant="contained"
+          onClick={() => {
+            let s = "data:text/csv;charset=utf-8,";
+
+            s += "block,timestamp,epoch,index\r\n";
+
+            data.rebases.forEach(({ blockNumber, rebasedAt, epoch, index }) => {
+              s += `${blockNumber},${rebasedAt.toString()},${epoch},${
+                index / data.rebases[0].index
+              }\r\n`;
+            });
+
+            window.open(encodeURI(s));
+          }}
+        >
+          Export CSV
+        </Button>
+        <TableContainer sx={{ maxHeight: 300 }}>
+          <Table stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell>Block no.</TableCell>
+                <TableCell>Datetime</TableCell>
+                <TableCell>Epoch</TableCell>
+                <TableCell>Index</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {data.rebases.map(({ blockNumber, rebasedAt, epoch, index }) => (
+                <TableRow key={rebasedAt.toString()}>
+                  <TableCell>
+                    <Link
+                      href={`http://ftmscan.com/block/${blockNumber}`}
+                      title="Link to ftmscan block"
+                      target="_blank"
+                    >
+                      {blockNumber}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    {rebasedAt.toLocaleString(DateTime.DATETIME_FULL)}
+                  </TableCell>
+                  <TableCell>{epoch}</TableCell>
+                  <TableCell>
+                    {Number(index / data.rebases[0].index).toFixed(3)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Grid>
       <Grid item style={{ height: 300 }}>
         <Line
