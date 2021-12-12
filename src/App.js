@@ -624,12 +624,6 @@ function App() {
       })
   );
 
-  let spaIndex = 1;
-  const rebasesWithIndex = rebases.map((rebase) => {
-    spaIndex *= 1 + parseFloat(rebase.percentage);
-    return { ...rebase, index: spaIndex };
-  });
-
   return (
     <Grid container direction="column" spacing={2} sx={{ p: 2 }}>
       <Grid item style={{ height: 300 }}>
