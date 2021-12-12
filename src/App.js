@@ -890,9 +890,8 @@ function App() {
               { controlVariable, maxPayout, basePrice, currentDebt, debtRatio },
             ]) => {
               const calcDebtRatio = currentDebt / data.spa.totalSupply / 100;
-
-              // const maxSpaPayout =
-              //   (maxPayout / 1000 / 100) * (data.spa.totalSupply / 10 ** 9);
+              const maxSpaPayout =
+                (maxPayout / 1000 / 100) * (data.spa.totalSupply / 10 ** 9);
               let price =
                 (((controlVariable * parseFloat(debtRatio) +
                   parseFloat(basePrice)) /
@@ -924,10 +923,10 @@ function App() {
                     <Typography>
                       Base Price: {formatUSD(basePrice / 10 ** 9)}
                     </Typography>
-                    {/* <Typography>
+                    <Typography>
                       Max Payout: {formatToken(maxSpaPayout)} SPA (
                       {formatUSD(maxSpaPayout * data.spa.price)})
-                    </Typography> */}
+                    </Typography>
                     <Typography>
                       Current Debt: {formatToken(currentDebt / 10 ** 9 / 100)}{" "}
                       SPA
